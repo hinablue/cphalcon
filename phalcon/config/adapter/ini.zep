@@ -89,10 +89,10 @@ class Ini extends Config
 			if typeof directives == "array" {
 				let sections = [];
 				for path, lastValue in directives {
-					let sections[] = this->_parseIniString((string)path, lastValue);
+					let sections[] = this->_parseIniString((string) path, lastValue);
 				}
 				if count(sections) {
-					let config[section] = call_user_func_array("array_merge_recursive", sections);
+					let config[section] = call_user_func_array([this, "_array_merge_recursive_distinct"], sections);
 				}
 			} else {
 				let config[section] = this->_cast(directives);
@@ -101,6 +101,54 @@ class Ini extends Config
 
 		parent::__construct(config);
 	}
+
+  /**
+   * Marge arrays recursively and distinct
+   * 
+   * Merges any number of arrays / parameters recursively, replacing 
+   * entries with string keys with values from latter arrays. 
+   * If the entry or the next value to be assigned is an array, then it 
+   * automagically treats both arguments as an array.
+   * Numeric entries are appended, not replaced, but only if they are 
+   * unique
+   *
+   * @param  array $array1 Initial array to merge.
+   * @param  array ...     Variable list of arrays to recursively merge.
+   *
+   * @link   http://www.php.net/manual/en/function.array-merge-recursive.php#96201
+   * @author Mark Roduner <mark.roduner@gmail.com>
+   & @modified Hina Chen <hinablue@gmail.com>
+   */
+  protected function _array_merge_recursive_distinct() -> array
+  {
+    var arrays, base, append, key, value;
+
+    let arrays = func_get_args();
+    let base = array_shift(arrays);
+
+    if typeof base != "array" {
+      let base = empty(base) ? [] : [base];
+    }
+
+    for append in arrays {
+      if typeof append != "array" {
+        let append = [append];
+      }
+      for key, value in append {
+        if typeof value == "array" || (array_key_exists(key, base) && typeof base[key] == "array") {
+          let base[key] = call_user_func_array([this, "_array_merge_recursive_distinct"], [base[key], append[key]]);
+        } elseif is_numeric(key) {
+          if !in_array(value, base) {
+            let base[key] = value;
+          }
+        } else {
+          let base[key] = value;
+        }
+      }
+    }
+
+    return base;
+  }
 
 	/**
 	 * Build multidimensional array from string
@@ -125,13 +173,13 @@ class Ini extends Config
 		let pos = strpos(path, ".");
 
 		if pos === false {
-			return [path: value];
+			return [(string) path: value];
 		}
 
 		let key = substr(path, 0, pos);
 		let path = substr(path, pos + 1);
 
-		return [key: this->_parseIniString(path, value)];
+		return [(string) key: this->_parseIniString(path, value)];
 	}
 	/**
 	 * We have to cast values manually because parse_ini_file() has a poor implementation.
@@ -142,18 +190,18 @@ class Ini extends Config
 	{
 		var key, val;
 		if typeof ini == "array" {
-			for key, val in ini{
+			for key, val in ini {
 				let ini[key] = this->_cast(val);
 			}
 		}
 		if typeof ini == "string" {
 			// Decode true
-			if ini === "true" || ini === "yes" || strtolower(ini) === "on"{
+			if ini === "true" || ini === "yes" || strtolower(ini) === "on" {
 				return true;
 			}
 	
 			// Decode false
-			if ini === "false" || ini === "no" || strtolower(ini) === "off"{
+			if ini === "false" || ini === "no" || strtolower(ini) === "off" {
 				return false;
 			}
 	
