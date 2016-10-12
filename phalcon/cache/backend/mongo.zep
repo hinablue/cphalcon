@@ -114,76 +114,76 @@ class Mongo extends Backend implements BackendInterface
 					throw new Exception("The backend requires a valid MongoDB connection string");
 				}
 
-          let mongo = new \MongoClient(server);
-        }
+				let mongo = new \MongoClient(server);
+			}
 
-        /**
-         * Check if the database name is a string
-         */
-        let database = options["db"];
-        if !database || typeof database != "string" {
-          throw new Exception("The backend requires a valid MongoDB db");
-        }
+			/**
+			 * Check if the database name is a string
+			 */
+			let database = options["db"];
+			if !database || typeof database != "string" {
+				throw new Exception("The backend requires a valid MongoDB db");
+			}
 
-        /**
-         * Retrieve the connection name
-         */
-        let collection = options["collection"];
-        if !collection || typeof collection != "string" {
-          throw new Exception("The backend requires a valid MongoDB collection");
-        }
+			/**
+			 * Retrieve the connection name
+			 */
+			let collection = options["collection"];
+			if !collection || typeof collection != "string" {
+				throw new Exception("The backend requires a valid MongoDB collection");
+			}
 
-        /**
-         * Make the connection and get the collection
-         */
-        let mongoCollection = mongo->selectDb(database)->selectCollection(collection),
-          this->_collection = mongoCollection;
-      }
+			/**
+			 * Make the connection and get the collection
+			 */
+			let mongoCollection = mongo->selectDb(database)->selectCollection(collection),
+				this->_collection = mongoCollection;
+		}
 
-      return mongoCollection;
-    }
+		return mongoCollection;
+	}
 
-    /**
-     * Returns a cached content
-     */
-    public function get(string keyName, int lifetime = null) -> var | null
-    {
-      var frontend, prefixedKey, conditions,  document, cachedContent;
-
-      let conditions = [];
-      let frontend = this->_frontend;
-      let prefixedKey = this->_prefix . keyName;
-      let this->_lastKey = prefixedKey;
-
-      let conditions["key"] = prefixedKey;
-      let conditions["time"] = ["$gt": time()];
-
-      let document = this->_getCollection()->findOne(conditions);
-      if typeof document == "array" {
-        if fetch cachedContent, document["data"] {
-          if is_numeric(cachedContent) {
-            return cachedContent;
-          }
-          return frontend->afterRetrieve(cachedContent);
-        } else {
-          throw new Exception("The cache is corrupt");
-        }
-      }
-
-      return null;
-    }
-
-    /**
-     * Stores cached content into the file backend and stops the frontend
-     *
-     * @param int|string keyName
-     * @param string content
-     * @param long lifetime
-     * @param boolean stopBuffer
-     */
-    public function save(keyName = null, content = null, lifetime = null, boolean stopBuffer = true) -> boolean
+	/**
+	 * Returns a cached content
+	 */
+	public function get(string keyName, int lifetime = null) -> var | null
 	{
-		var lastkey, prefix, frontend, cachedContent, tmp, ttl,
+		var frontend, prefixedKey, conditions,  document, cachedContent;
+
+		let conditions = [];
+		let frontend = this->_frontend;
+		let prefixedKey = this->_prefix . keyName;
+		let this->_lastKey = prefixedKey;
+
+		let conditions["key"] = prefixedKey;
+		let conditions["time"] = ["$gt": time()];
+
+		let document = this->_getCollection()->findOne(conditions);
+		if typeof document == "array" {
+			if fetch cachedContent, document["data"] {
+				if is_numeric(cachedContent) {
+					return cachedContent;
+				}
+				return frontend->afterRetrieve(cachedContent);
+			} else {
+				throw new Exception("The cache is corrupt");
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Stores cached content into the file backend and stops the frontend
+	 *
+	 * @param int|string keyName
+	 * @param string content
+	 * @param long lifetime
+	 * @param boolean stopBuffer
+	 */
+	public function save(keyName = null, content = null, lifetime = null, boolean stopBuffer = true) -> boolean
+	{
+		var lastkey, frontend, cachedContent, tmp, ttl,
 			collection, timestamp, conditions, document, preparedContent,
 			isBuffering, data, success;
 
@@ -193,9 +193,8 @@ class Mongo extends Backend implements BackendInterface
 		if keyName === null {
 			let lastkey = this->_lastKey;
 		} else {
-			let prefix = this->_prefix;
-			let lastkey = prefix . keyName;
-			let this->_lastKey = lastkey;
+			let lastkey = this->_prefix . keyName,
+				this->_lastKey = lastkey;
 		}
 
 		if !lastkey {
@@ -211,6 +210,8 @@ class Mongo extends Backend implements BackendInterface
 
 		if !is_numeric(cachedContent) {
 			let preparedContent = frontend->beforeStore(cachedContent);
+		} else {
+			let preparedContent = cachedContent;
 		}
 
 		if lifetime === null {
@@ -230,28 +231,14 @@ class Mongo extends Backend implements BackendInterface
 			document = collection->findOne(conditions);
 
 		if typeof document == "array" {
-
-			let document["time"] = timestamp;
-
-			if !is_numeric(cachedContent) {
-				let document["data"] = preparedContent;
-			} else {
-				let document["data"] = cachedContent;
-			}
-
-			let success = collection->update(["_id": document["_id"]], document);
+			let document["time"] = timestamp,
+				document["data"] = preparedContent,
+				success = collection->update(["_id": document["_id"]], document);
 		} else {
-
 			let data["key"] = lastkey,
-				data["time"] = timestamp;
-
-			if !is_numeric(cachedContent) {
-				let data["data"] = preparedContent;
-			} else {
-				let data["data"] = cachedContent;
-			}
-
-			let success = collection->insert(data);
+				data["time"] = timestamp,
+				data["data"] = preparedContent,
+				success = collection->insert(data);
 		}
 
 		if !success {
